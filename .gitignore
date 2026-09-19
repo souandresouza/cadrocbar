@@ -1,0 +1,11 @@
+# estados locais
+*.log
+*.swp
+.DS_Store
+
+# configs locais por usuário
+/config/local
+
+# binários/temporários de scripts
+scripts/headphones/*.pyc
+__pycache__/
