@@ -106,6 +106,7 @@ Row {
 					Audio {}
 					Backlight {}
 					PowerMenu { popup: powerMenuPopup }
+					Clipboard { popup: clipboardPopup }
 					Lock {}
 					PowerProfile {}
 					Battery {}
@@ -142,8 +143,18 @@ Row {
 		}
 	}
 
+	PopoutBase {
+		id: clipboardPopup
+		screen: barRoot.screen
+		popupWidth: 620
+		popupHeight: 400
+		content: Component {
+			ClipboardPopup {}
+		}
+	}
+
 	function closeOtherPopouts(except) {
-		const all = [calendarPopup, mediaPopup, powerMenuPopup];
+		const all = [calendarPopup, mediaPopup, powerMenuPopup, clipboardPopup];
 		for (const p of all) {
 			if (p !== except)
 				p.closePopup();
@@ -154,6 +165,7 @@ Row {
 		PopupService.media = mediaPopup;
 		PopupService.calendar = calendarPopup;
 		PopupService.powerMenu = powerMenuPopup;
+		PopupService.clipboard = clipboardPopup;
 	}
 
 	Connections {
@@ -174,5 +186,17 @@ Row {
 	Connections {
 		target: powerMenuPopup.contentItem
 		function onActionTriggered() { powerMenuPopup.closePopup() }
+	}
+
+	Connections {
+		target: clipboardPopup
+		function onOpened() { barRoot.closeOtherPopouts(clipboardPopup) }
+	}
+
+	Connections {
+		target: clipboardPopup.contentItem
+		function onActionTriggered(action) {
+			clipboardPopup.closePopup();
+		}
 	}
 }
