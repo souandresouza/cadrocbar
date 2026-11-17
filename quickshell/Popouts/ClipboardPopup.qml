@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Common
 import qs.Services
+import qs.Widgets
 
 Item {
 	id: root
@@ -51,35 +52,35 @@ Item {
 	function deleteItem(index, fullLine) {
 		root.isDeleting = true;
 		deletingResetTimer.restart();
-		root.filteredModel.remove(index, 1, root.clipboardModel);
+		filteredModel.remove(index, 1, clipboardModel);
 		Quickshell.execDetached(["bash", "-c", "echo " + lineToShellSafe(fullLine) + " | cliphist delete"]);
 	}
 
 	function wipeClipboard() {
-		if (root.filteredModel.count === 0)
+		if (filteredModel.count === 0)
 			return;
 		root.isDeleting = true;
 		wipeTimer.restart();
-		root.filteredModel.clear();
+		filteredModel.clear();
 		Quickshell.execDetached(["cliphist", "wipe"]);
 	}
 
 	function loadClipboard() {
-		root.clipboardModel.clear();
-		root.filteredModel.clear();
+		clipboardModel.clear();
+		filteredModel.clear();
 		clipboardProcess.running = true;
 	}
 
 	function filterClipboard(query) {
 		let q = (query || "").trim().toLowerCase();
-		root.filteredModel.clear();
-		for (let i = 0; i < root.clipboardModel.count; i++) {
-			const entry = root.clipboardModel.get(i);
+		filteredModel.clear();
+		for (let i = 0; i < clipboardModel.count; i++) {
+			const entry = clipboardModel.get(i);
 			const hay = (entry.text + " " + (entry.preview || "")).toLowerCase();
 			if (!q || hay.includes(q))
-				root.filteredModel.append(entry);
+				filteredModel.append(entry);
 		}
-		if (root.filteredModel.count > 0)
+		if (filteredModel.count > 0)
 			resultList.currentIndex = 0;
 		else
 			resultList.currentIndex = -1;
@@ -120,7 +121,7 @@ Item {
 				const itemId = line.slice(0, tab);
 				const full = line.slice(tab + 1);
 				const isImage = full.startsWith("[[ binary data") && full.includes("]]");
-				root.clipboardModel.append({
+				clipboardModel.append({
 					"itemId": itemId,
 					"fullLine": line,
 					"text": full.replace(/[\u001f\u001e]/g, " ").trim(),
@@ -128,7 +129,7 @@ Item {
 					"isImage": isImage
 				});
 			}
-			root.filterClipboard(root.searchField.text);
+			root.filterClipboard(searchField.text);
 		}
 	}
 
@@ -192,19 +193,19 @@ Item {
 							resultList.currentIndex = Math.max(resultList.currentIndex - 1, 0);
 							event.accepted = true;
 						} else if (event.key === Qt.Key_Down) {
-							resultList.currentIndex = Math.min(resultList.currentIndex + 1, root.filteredModel.count - 1);
+							resultList.currentIndex = Math.min(resultList.currentIndex + 1, filteredModel.count - 1);
 							event.accepted = true;
 						} else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
 							let idx = resultList.currentIndex;
-							if (idx >= 0 && idx < root.filteredModel.count) {
-								root.copyItemDetached(root.filteredModel.get(idx).itemId);
+							if (idx >= 0 && idx < filteredModel.count) {
+								root.copyItemDetached(filteredModel.get(idx).itemId);
 								root.actionTriggered("copy");
 							}
 							event.accepted = true;
 						} else if (event.key === Qt.Key_Delete) {
 							let idx = resultList.currentIndex;
-							if (idx >= 0 && idx < root.filteredModel.count) {
-								root.deleteItem(idx, root.filteredModel.get(idx).fullLine);
+							if (idx >= 0 && idx < filteredModel.count) {
+								root.deleteItem(idx, filteredModel.get(idx).fullLine);
 								event.accepted = true;
 							}
 						}
@@ -222,7 +223,7 @@ Item {
 				id: wipeButton
 				width: Theme.roundScaled(38, root.sf)
 				height: Theme.roundScaled(38, root.sf)
-				visible: root.filteredModel.count > 0
+				visible: filteredModel.count > 0
 
 				IconText {
 					glyph: "\uf1f8"
@@ -238,7 +239,7 @@ Item {
 			width: parent.width
 			height: parent.height - searchBoxBg.height - parent.spacing
 			clip: true
-			model: root.filteredModel
+			model: filteredModel
 			currentIndex: -1
 			spacing: Theme.roundScaled(2, root.sf)
 
