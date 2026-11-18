@@ -13,6 +13,9 @@ Item {
 
 	required property var screen
 
+	// Mantém o singleton (e seu IpcHandler do Super+Space) vivo sem exibir o ícone.
+	property var launcherRef: LauncherService
+
 	Timer {
 		interval: 300
 		repeat: false
@@ -71,7 +74,6 @@ Item {
 				anchors.leftMargin: 8
 				anchors.verticalCenter: parent.verticalCenter
 
-				Launcher { screen: barRoot.screen }
 				Workspaces { screen: barRoot.screen }
 				FocusedWindow { screen: barRoot.screen }
 				Media { popup: mediaPopup }
@@ -102,13 +104,12 @@ Row {
 					anchors.rightMargin: 8
 					anchors.verticalCenter: parent.verticalCenter
 
-					Weather {}
+					IdleInhibitor {}
 					Audio {}
 					Backlight {}
+					Swaync {}
 					PowerMenu { popup: powerMenuPopup }
-					Clipboard { popup: clipboardPopup }
 					Lock {}
-					PowerProfile {}
 					Battery {}
 			}
 		}
@@ -143,18 +144,8 @@ Row {
 		}
 	}
 
-	PopoutBase {
-		id: clipboardPopup
-		screen: barRoot.screen
-		popupWidth: 620
-		popupHeight: 400
-		content: Component {
-			ClipboardPopup {}
-		}
-	}
-
 	function closeOtherPopouts(except) {
-		const all = [calendarPopup, mediaPopup, powerMenuPopup, clipboardPopup];
+		const all = [calendarPopup, mediaPopup, powerMenuPopup];
 		for (const p of all) {
 			if (p !== except)
 				p.closePopup();
@@ -165,7 +156,6 @@ Row {
 		PopupService.media = mediaPopup;
 		PopupService.calendar = calendarPopup;
 		PopupService.powerMenu = powerMenuPopup;
-		PopupService.clipboard = clipboardPopup;
 	}
 
 	Connections {
@@ -186,17 +176,5 @@ Row {
 	Connections {
 		target: powerMenuPopup.contentItem
 		function onActionTriggered() { powerMenuPopup.closePopup() }
-	}
-
-	Connections {
-		target: clipboardPopup
-		function onOpened() { barRoot.closeOtherPopouts(clipboardPopup) }
-	}
-
-	Connections {
-		target: clipboardPopup.contentItem
-		function onActionTriggered(action) {
-			clipboardPopup.closePopup();
-		}
 	}
 }

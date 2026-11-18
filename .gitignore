@@ -6,6 +6,5 @@
 # configs locais por usuário
 /config/local
 
-# binários/temporários de scripts
-scripts/headphones/*.pyc
+# temporários de scripts
 __pycache__/

@@ -9,19 +9,17 @@ Tema dinâmico a partir do [pywal](https://github.com/dylanaraps/pywal) (fallbac
 - [QuickShell](https://quickshell.outfoxxed.me/) (≥ 0.1.0)
 - Nerd Font (padrão: `JetBrainsMono Nerd Font`) — altere em `quickshell/Common/Theme.qml`
 - `curl`, `jq`, `python3`
-- PipeWire/WirePlumber (`wpctl`)
-- `brightnessctl` (brilho)
-- NetworkManager (`nmcli`)
-- BlueZ (`bluetoothctl`)
+- PipeWire/WirePlumber (`wpctl`) — volume
+- `brightnessctl` — brilho
 - opcionais:
-  - `cliphist` + `wl-clipboard` — modo clipboard do launcher
-  - `qrencode` — QR de Wi-Fi no popup de rede
+  - `swaync` — ícone na barra abre/alterna o painel de notificações (`swaync-client -t`)
+  - `wl-clipboard` (`wl-copy`) — copia o resultado da calculadora do launcher
   - `swaylock` — fallback do lock screen
 
 ## Instalação
 
 ```bash
-git clone https://github.com/<seu-usuario>/cadrocbar.git ~/cadrocbar
+git clone https://github.com/souandresouza/cadrocbar.git ~/cadrocbar
 bash ~/cadrocbar/install.sh
 ```
 
@@ -30,20 +28,40 @@ O `install.sh` verifica dependências e cria a pasta de configuração por usuá
 ## Iniciar
 
 ```bash
+quickshell -c cadrocbar
+# ou, direto do repo:
 quickshell --path ~/cadrocbar/quickshell/
 ```
 
-Adicione no autostart do Hyprland (ex.: em `hyprland.conf` ou um `.lua` com `hl.exec_cmd`):
+Adicione no autostart do Hyprland (ex.: em `hyprland.conf` ou um `.lua` com `hl.exec_cmd`). **Use apenas uma** das formas acima — duas instâncias simultâneas geram barras duplicadas:
 
+```lua
+hl.exec_cmd("quickshell -c cadrocbar")
 ```
-quickshell --path ~/cadrocbar/quickshell/
-```
+
+## Módulos ativos
+
+| Seção | Módulos |
+| --- | --- |
+| Esquerda | Workspaces (número da ativa), FocusedWindow, Media |
+| Centro | Clock |
+| Direita | IdleInhibitor, Audio, Backlight, Swaync, PowerMenu, Lock, Battery |
+
+Clicar no ícone do IdleInhibitor alterna a inibição de suspensão (ícone de olho aberto/fechado).
+O ícone do Swaync exige que o daemon `swaync` esteja rodando.
+
+## Launcher
+
+`Super+Space` abre o launcher (via IPC). Além de apps, ele entende:
+
+- **calculadora**: `2+2*3` → `8`, `sqrt(16)+2` → `6`, `pi*2` → `6.283185` (resultado vai para `wl-copy`)
+- **busca web** (prefixo + espaço): `g foo`, `yt teste`, `w hyprland`, `gh cadroc`, `ddg linux`
+- **comando**: `> ls` executa no terminal definido por `CADROCBAR_TERMINAL`
 
 ## Configuração
 
 | Item | Como configurar |
 | --- | --- |
-| Cidade do clima | arquivo `~/.config/cadrocbar/weather.location` (uma linha, ex.: `Lisbon`) ou env `CADROCBAR_WEATHER_LOCATION`. Vazio = localização automática do wttr.in |
 | Avatar no lock | imagem em `~/.config/cadrocbar/avatar.png` (opcional, oculta se ausente) |
 | Terminal p/ apps | env `CADROCBAR_TERMINAL` (padrão `kitty`) |
 | Papel de parede no lock | `~/.cache/current_wallpaper.png` |
@@ -51,22 +69,21 @@ quickshell --path ~/cadrocbar/quickshell/
 
 ## Binds (IPC)
 
-O bar expõe chamadas IPC via `qsc` (o CLI do QuickShell):
+O bar expõe chamadas IPC via `qs` (o CLI do QuickShell):
 
 ```bash
-# launcher de apps / clipboard
-qsc -s cadrocbar ipc call launcher toggleApps
-qsc -s cadrocbar ipc call launcher toggleClipboard
+qs -c cadrocbar ipc call launcher toggleApps
+qs -c cadrocbar ipc call launcher isOpen
+qs -c cadrocbar ipc call launcher search '2+2*3'
 
-# lock
-qsc -s cadrocbar ipc call lock toggle
-qsc -s cadrocbar ipc call lock isLocked
+qs -c cadrocbar ipc call lock toggle
+qs -c cadrocbar ipc call lock isLocked
 ```
 
 Exemplo em `binds.lua` do Hyprland:
 
 ```lua
-local ipc = "qsc -s cadrocbar ipc call"
+local ipc = "qs -c cadrocbar ipc call"
 hl.bind("SUPER + SPACE", hl.dsp.exec_cmd(ipc .. " launcher toggleApps"), { description = "app launcher" })
 hl.bind("SUPER + L",     hl.dsp.exec_cmd(ipc .. " lock toggle"),           { description = "lock screen" })
 ```
@@ -78,11 +95,13 @@ cadrocbar/
 ├── install.sh            # verificação de dependências e setup
 ├── quickshell/           # config do QuickShell (Bar.qml, Modules/, Services/, Popouts/)
 │   ├── Bar.qml           # barra principal (escolha os módulos aqui)
-│   ├── Modules/          # Launcher, Workspaces, Clock, Weather, Audio, ...
-│   ├── Services/         # serviços (Wi-Fi, áudio, MPRIS, notificações, lock...)
-│   ├── Popouts/          # popups (calendário, mídia, power menu...)
-│   └── Common/Theme.qml  # paleta, medidas, fontes
-└── scripts/              # scripts auxiliares (network, wifi, weather, sysinfo...)
+│   ├── Modules/          # Audio, Backlight, Battery, Clock, FocusedWindow,
+│   │                     # IdleInhibitor, Lock, Media, PowerMenu, Swaync, Workspaces
+│   ├── Services/         # Audio, Backlight, IdleInhibitor, Launcher, Lock, Mpris, Popup
+│   ├── Popouts/          # calendar, mídia, power menu
+│   ├── Widgets/          # IconText, ModuleButton
+│   └── Common/           # Theme, PopoutBase, MathEval (parser da calculadora)
+└── scripts/              # backlight.sh, launcher.py, mpris.py
 ```
 
 Os scripts são localizados dinamicamente (relativos ao diretório do QuickShell), então o repo pode ser clonado em qualquer caminho.
@@ -92,13 +111,19 @@ Os scripts são localizados dinamicamente (relativos ao diretório do QuickShell
 Edite `quickshell/Bar.qml` — a seção direita (`rightSection`) lista os módulos ativos. Para adicionar/remover, basta comentar/descomentar a linha do módulo correspondente:
 
 ```qml
-Weather {}
+IdleInhibitor {}
 Audio {}
 Backlight {}
+Swaync {}
 PowerMenu { popup: powerMenuPopup }
 Lock {}
-PowerProfile {}
 Battery {}
 ```
 
-Módulos e popups opcionais também existem em `Modules/` e `Popouts/` (ex.: `Network`, `Bluetooth`, `Cpu`, `Memory`, `Temperature`, `Notifications`, `ControlCenter`).
+Para manter o atalho `Super+Space` funcionando sem exibir o ícone do launcher, preserve em `Bar.qml`:
+
+```qml
+property var launcherRef: LauncherService
+```
+
+Sem essa referência o singleton não é instanciado e o IPC do launcher responde `Target not found`.

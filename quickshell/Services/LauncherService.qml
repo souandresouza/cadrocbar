@@ -12,8 +12,6 @@ Singleton {
 	property var entries: []
 	property var query: ""
 	property var wal: ({})
-	property string mode: "apps"
-	property var history: []
 
 	function hexColor(hex, alpha) {
 		const c = /^#?([0-9a-f]{6})/i.exec(hex || "");
@@ -48,17 +46,15 @@ Singleton {
 		? launcher.hexColor(launcher.wal.color0, 0.5)
 		: Theme.moduleHover
 
-	readonly property var filtered: {
-		const q = query.trim().toLowerCase();
-		if (mode === "cliphist") {
-			if (!q)
-				return history;
-			return history.filter(h => (h.text + " " + h.preview).toLowerCase().includes(q));
-		}
-		if (!q)
-			return entries;
-		return entries.filter(e => (e.name + " " + e.comment).toLowerCase().includes(q));
-	}
+	readonly property var filtered: launcher.buildResults(query)
+
+	readonly property var searchEngines: [
+		{ prefix: "g", name: "Google", url: "https://www.google.com/search?q=" },
+		{ prefix: "yt", name: "YouTube", url: "https://www.youtube.com/results?search_query=" },
+		{ prefix: "w", name: "Wikipedia", url: "https://en.wikipedia.org/w/index.php?search=" },
+		{ prefix: "gh", name: "GitHub", url: "https://github.com/search?q=" },
+		{ prefix: "ddg", name: "DuckDuckGo", url: "https://duckduckgo.com/?q=" }
+	]
 
 	function glyphFor(entry) {
 		const n = ((entry.name || "") + " " + (entry.icon || "")).toLowerCase();
@@ -85,13 +81,6 @@ Singleton {
 		return "\uf0ae";
 	}
 
-	function copyItem(entry) {
-		if (!entry)
-			return;
-		Quickshell.execDetached(["sh", "-c", "cliphist decode " + entry.id + " | wl-copy"]);
-		launcher.close();
-	}
-
 	function parseExec(exec) {
 		const tokens = [];
 		const re = /"([^"]*)"|'([^']*)'|\S+/g;
@@ -102,13 +91,115 @@ Singleton {
 		return tokens;
 	}
 
+	function findEngine(token) {
+		const needle = String(token || "").toLowerCase();
+		for (let i = 0; i < searchEngines.length; i++)
+			if (searchEngines[i].prefix === needle)
+				return searchEngines[i];
+		return null;
+	}
+
+	// O prefixo só vira busca web quando há espaço depois dele, para que
+	// digitar "w" continue encontrando apps normalmente.
+	function engineForQuery(text) {
+		const parts = String(text || "").replace(/^\s+/, "").split(/\s+/);
+		if (parts.length < 2)
+			return null;
+		return findEngine(parts[0]);
+	}
+
+	function appResult(entry) {
+		return {
+			type: "app",
+			name: entry.name,
+			comment: entry.comment || "",
+			icon: entry.icon || "",
+			glyph: launcher.glyphFor(entry),
+			exec: entry.exec,
+			terminal: !!entry.terminal
+		};
+	}
+
+	function buildResults(text) {
+		const q = String(text || "").trim();
+		let out = [];
+
+		if (!q)
+			return entries.map(e => launcher.appResult(e));
+
+		if (q.startsWith(">")) {
+			const term = q.substring(1).trim();
+			if (term.length > 0)
+				out.push({
+					type: "run",
+					name: term,
+					comment: "Executar no terminal",
+					glyph: "\uf120",
+					command: term
+				});
+			return out;
+		}
+
+		// Calculadora: apenas expressões reais, nunca um número sozinho.
+		if (MathEval.isExpression(q)) {
+			const formatted = MathEval.format(MathEval.evaluate(q));
+			if (formatted !== "")
+				out.push({
+					type: "calculator",
+					name: q + " = " + formatted,
+					comment: "Copiar resultado",
+					glyph: "\uf0e7",
+					value: formatted
+				});
+		}
+
+		const engine = launcher.engineForQuery(q);
+		if (engine) {
+			const parts = q.replace(/^\s+/, "").split(/\s+/);
+			const search = parts.slice(1).join(" ").trim();
+			if (search) {
+				const url = engine.url + encodeURIComponent(search);
+				out.push({
+					type: "search",
+					name: "Buscar no " + engine.name + ": " + search,
+					comment: url,
+					glyph: "\uf0ac",
+					url: url
+				});
+			}
+		} else {
+			const lower = q.toLowerCase();
+			out = out.concat(entries
+				.filter(e => ((e.name || "") + " " + (e.comment || "")).toLowerCase().includes(lower))
+				.map(e => launcher.appResult(e)));
+		}
+
+		return out;
+	}
+
 	function launch(entry) {
 		if (!entry)
 			return;
-		if (launcher.mode === "cliphist") {
-			launcher.copyItem(entry);
+
+		if (entry.type === "calculator") {
+			Quickshell.execDetached(["wl-copy", "--", String(entry.value)]);
+			launcher.close();
 			return;
 		}
+
+		if (entry.type === "search") {
+			Quickshell.execDetached(["xdg-open", entry.url]);
+			launcher.close();
+			return;
+		}
+
+		if (entry.type === "run") {
+			const term = Quickshell.env("CADROCBAR_TERMINAL", "kitty");
+			Quickshell.execDetached([term, "-e", "sh", "-c", entry.command]);
+			launcher.close();
+			return;
+		}
+
 		const argv = launcher.parseExec(entry.exec);
 		if (argv.length === 0)
 			argv.push(entry.name || "sh");
@@ -123,10 +214,7 @@ Singleton {
 			popupWindow.screen = screen;
 			card.sf = Math.max(0.75, Math.round((screen.height / Theme.referenceHeight) * 100) / 100);
 		}
-		if (launcher.mode === "apps")
-			entriesProcess.exec([Theme.binDir + "/launcher.py"]);
-		else
-			clipProcess.exec(["cliphist", "list"]);
+		entriesProcess.exec([Theme.binDir + "/launcher.py"]);
 		launcher.query = "";
 		popupWindow.visible = true;
 		queryInput.forceActiveFocus();
@@ -134,12 +222,6 @@ Singleton {
 	}
 
 	function toggleApps(screen) {
-		launcher.mode = "apps";
-		launcher.toggle(screen);
-	}
-
-	function toggleClipboard(screen) {
-		launcher.mode = "cliphist";
 		launcher.toggle(screen);
 	}
 
@@ -186,33 +268,6 @@ Singleton {
 		}
 	}
 
-	Process {
-		id: clipProcess
-
-		running: false
-		stdout: StdioCollector {
-			id: clipColl
-			waitForEnd: true
-		}
-
-		onExited: () => {
-			const arr = [];
-			for (const ln of clipColl.text.toString().split("\n")) {
-				const t = ln.trim();
-				if (!t)
-					continue;
-				const i = t.indexOf("\t");
-				if (i < 0)
-					continue;
-				const id = t.slice(0, i).trim();
-				const preview = t.slice(i + 1);
-				const text = preview.replace(/[\u001f\u001e]/g, " ").trim();
-				arr.push({ id: id, text: text, preview: preview });
-			}
-			launcher.history = arr;
-		}
-	}
-
 	IpcHandler {
 		target: "launcher"
 
@@ -220,12 +275,12 @@ Singleton {
 			launcher.toggleApps(Quickshell.screens[0]);
 		}
 
-		function toggleClipboard(): void {
-			launcher.toggleClipboard(Quickshell.screens[0]);
-		}
-
 		function isOpen(): bool {
 			return popupWindow.visible;
+		}
+
+		function search(query: string): string {
+			return JSON.stringify(launcher.buildResults(query));
 		}
 	}
 
@@ -284,7 +339,7 @@ Rectangle {
 
 						Text {
 							visible: launcher.query.length === 0
-							text: launcher.mode === "cliphist" ? "Clipboard" : "Pesquisar apps"
+							text: "Apps · conta · g/yt/w/gh/ddg · > comando"
 							color: launcher.fgDim
 							font.family: Theme.fontFamily
 							font.pixelSize: Theme.roundScaled(Theme.fontSizeLarge, card.sf)
@@ -320,7 +375,7 @@ Rectangle {
 							} else if (event.key === Qt.Key_Tab) {
 								const e = resultList.currentItem && resultList.currentItem.entry;
 								if (e)
-									launcher.query = e.name;
+									launcher.query = e.type === "calculator" ? String(e.value) : e.name;
 								event.accepted = true;
 							} else if (event.key === Qt.Key_Escape) {
 								launcher.close();
@@ -354,7 +409,7 @@ Rectangle {
 							spacing: Theme.roundScaled(10, card.sf)
 
 							IconText {
-								glyph: launcher.mode === "cliphist" ? "\uf0ea" : launcher.glyphFor(modelData)
+								glyph: modelData.glyph || launcher.glyphFor(modelData)
 								glyphColor: launcher.accentColor
 								width: Theme.roundScaled(24, card.sf)
 							}
@@ -366,7 +421,7 @@ Rectangle {
 
 								Text {
 									width: parent.width
-									text: launcher.mode === "cliphist" ? modelData.text : modelData.name
+									text: modelData.name
 									font.family: Theme.fontFamily
 									font.pixelSize: Theme.roundScaled(Theme.fontSize, card.sf)
 									font.weight: Font.DemiBold
@@ -376,12 +431,12 @@ Rectangle {
 
 								Text {
 									width: parent.width
-									text: launcher.mode === "cliphist" ? "" : modelData.comment
+									text: modelData.comment
 									font.family: Theme.fontFamily
 									font.pixelSize: Theme.roundScaled(Theme.fontSizeSmall, card.sf)
 									color: launcher.fgDim
 									elide: Text.ElideRight
-									visible: launcher.mode !== "cliphist" && modelData.comment.length > 0
+									visible: modelData.comment.length > 0
 								}
 							}
 						}

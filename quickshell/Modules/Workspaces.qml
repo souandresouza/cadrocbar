@@ -24,29 +24,31 @@ Item {
 			model: Hyprland.workspaces
 
 			delegate: ModuleButton {
+				id: wsButton
+
 				required property var modelData
 				readonly property var ws: modelData
 
 				width: 26
 				height: Theme.contentHeight
-				visible: ws && ws.monitor === workspaces.monitor
-					&& (ws.toplevels.values.length > 0
-						|| (workspaces.monitor && workspaces.monitor.activeWorkspace
-							&& ws.id === workspaces.monitor.activeWorkspace.id))
-				active: ws && workspaces.monitor && workspaces.monitor.activeWorkspace
-					&& ws.id === workspaces.monitor.activeWorkspace.id
-				urgent: ws && ws.urgent
-				dim: ws && ws.toplevels.values.length === 0
+				visible: wsButton.ws && workspaces.monitor && workspaces.monitor.activeWorkspace
+					&& wsButton.ws.id === workspaces.monitor.activeWorkspace.id
+				active: wsButton.ws && workspaces.monitor && workspaces.monitor.activeWorkspace
+					&& wsButton.ws.id === workspaces.monitor.activeWorkspace.id
+				urgent: wsButton.ws && wsButton.ws.urgent
+				dim: false
 				accentColor: Theme.accent
 
 				IconText {
-					text: parent.ws ? String(parent.ws.id) : ""
-					textColor: parent.active ? Theme.accent
-						: parent.urgent ? Theme.danger
+					// O content é injetado no contentRow do ModuleButton, então
+					// "parent" aqui é o contentRow — usar o id do delegate.
+					text: wsButton.ws ? String(wsButton.ws.id) : ""
+					textColor: wsButton.active ? Theme.accent
+						: wsButton.urgent ? Theme.danger
 						: Theme.fg
 				}
 
-				onClicked: parent.ws && parent.ws.activate()
+				onClicked: wsButton.ws && wsButton.ws.activate()
 			}
 		}
 	}
