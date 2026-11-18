@@ -16,6 +16,21 @@ Item {
 	// Mantém o singleton (e seu IpcHandler do Super+Space) vivo sem exibir o ícone.
 	property var launcherRef: LauncherService
 
+	// O run-scripts.sh (ruwall/pywal) chama este IPC após gerar a paleta,
+	// para recarregar as cores sem reiniciar o QuickShell.
+	IpcHandler {
+		target: "theme"
+
+		function reload(): void {
+			LauncherService.refreshColors();
+			walProcess.exec([Theme.binDir + "/launcher.py"]);
+		}
+
+		function accent(): string {
+			return String(Theme.accent);
+		}
+	}
+
 	Timer {
 		interval: 300
 		repeat: false

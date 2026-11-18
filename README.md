@@ -78,7 +78,16 @@ qs -c cadrocbar ipc call launcher search '2+2*3'
 
 qs -c cadrocbar ipc call lock toggle
 qs -c cadrocbar ipc call lock isLocked
+
+# paleta (chamado pelo script de wallpaper após o ruwall/pywal gerar ~/.cache/wal)
+qs -c cadrocbar ipc call theme reload
+qs -c cadrocbar ipc call theme accent   # debug: cor de destaque atual
 ```
+
+A barra lê `~/.cache/wal/colors.css` no startup, mas **não** detecta mudanças sozinha.
+Ao trocar o wallpaper, chame `theme reload` (via `run-scripts.sh` ou do próprio
+comando do gerador de paleta) para atualizar cores da barra e do launcher sem
+reiniciar o QuickShell.
 
 Exemplo em `binds.lua` do Hyprland:
 

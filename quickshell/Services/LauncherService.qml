@@ -268,6 +268,11 @@ Singleton {
 		}
 	}
 
+	// Reexecuta o launcher.py para atualizar entries e cores do popup.
+	function refreshColors() {
+		entriesProcess.exec([Theme.binDir + "/launcher.py"]);
+	}
+
 	IpcHandler {
 		target: "launcher"
 
